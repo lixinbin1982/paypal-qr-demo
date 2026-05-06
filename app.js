@@ -426,6 +426,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   const { BASE_URL } = getCreds();
   console.log(`🚀 PayPal QR Demo running at http://localhost:${PORT}`);
-  console.log(`🔀 Credential: LIVE (sandbox available via toggle)`);
+  console.log(`🔀 Credential: ${credentialMode.toUpperCase()} (toggle available via API)`);
   console.log(`📦 BOPIS with shipping options ready`);
 });
