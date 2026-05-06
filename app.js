@@ -16,7 +16,7 @@ const SANDBOX_CLIENT_SECRET = process.env.PAYPAL_SANDBOX_CLIENT_SECRET || 'EF7BT
 const SANDBOX_BASE_URL = 'https://api-m.sandbox.paypal.com';
 
 // Credential mode — toggled via API
-let credentialMode = 'live'; // 'live' or 'sandbox'
+let credentialMode = 'sandbox'; // 'live' or 'sandbox'
 
 function getCreds() {
   if (credentialMode === 'live') {
