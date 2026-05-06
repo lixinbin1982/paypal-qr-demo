@@ -3,7 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const QRCode = require('qrcode');
 const app = express();
-const PORT = 3457;
+const PORT = process.env.PORT || 3457;
 
 // Live credentials
 const LIVE_CLIENT_ID = 'AVHelYkeISS6fnW6Nr305JicpQe1wfszAsHcGh_G-5Wh7qlCSdUZ_MNyvXzvXJPAOnc9rKtFuP7IV0Zi';
