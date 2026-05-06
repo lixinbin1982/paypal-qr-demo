@@ -323,11 +323,15 @@ app.post('/bopis/create', async (req, res) => {
       return res.status(500).json({ error: 'No payer-action link' });
     }
 
+    const qrDataUrl = await QRCode.toDataURL(payLink, {
+      width: 400, margin: 2, color: { dark: '#003087', light: '#ffffff' }
+    });
+
     res.json({
       order,
       pickupCode,
       payLink,
-      qrCode: null,
+      qrCode: qrDataUrl,
       bopis: bopisOrders[pickupCode]
     });
 
