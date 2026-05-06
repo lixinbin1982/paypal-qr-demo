@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayPal QR Code 付款 & BOPIS QR Pickup — 整合步骤</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 30px;
+    line-height: 1.8;
+    color: #2c3e50;
+    background: #f8f9fa;
+  }
+  .container { background: #fff; padding: 50px 60px; border-radius: 12px; box-shadow: 0 2px 20px rgba(0,0,0,0.08); }
+  
+  h1 {
+    color: #003087;
+    font-size: 26px;
+    border-bottom: 3px solid #003087;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h1::before { content: "💳"; font-size: 28px; }
+  
+  h2 {
+    color: #005b9f;
+    font-size: 20px;
+    margin-top: 35px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e8eef5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  h3 {
+    color: #0070ba;
+    font-size: 16px;
+    margin-top: 25px;
+    margin-bottom: 10px;
+  }
+  
+  p { margin-bottom: 10px; font-size: 15px; }
+  
+  code {
+    background: #eef2f7;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    font-size: 13px;
+    color: #e74c3c;
+  }
+  
+  pre {
+    background: #1e2a3a;
+    color: #e6eef7;
+    padding: 18px 20px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 12px 0;
+  }
+  
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 15px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid #dee2e6;
+    padding: 10px 14px;
+    text-align: left;
+  }
+  th {
+    background: #f0f4ff;
+    font-weight: 600;
+    color: #003087;
+  }
+  tr:nth-child(even) td { background: #fafbfc; }
+  
+  ul, ol { padding-left: 24px; margin: 8px 0; }
+  li { margin: 4px 0; font-size: 15px; }
+  
+  blockquote {
+    background: #e8f4fd;
+    border-left: 4px solid #0070ba;
+    padding: 12px 18px;
+    margin: 12px 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 14px;
+  }
+  
+  strong { color: #003087; }
+  
+  hr { border: none; border-top: 1px solid #e0e0e0; margin: 30px 0; }
+  
+  .step-num {
+    display: inline-block;
+    background: #003087;
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    text-align: center;
+    line-height: 24px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 600;
+    margin-right: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>PayPal QR Code 付款 & BOPIS QR Pickup — 整合步骤</h1>
+<p style="margin:5px 0"></p>
+<blockquote>
+呢份文件系俾 merchant 睇嘅，用中文解释点样整合 PayPal QR Code 付款同 BOPIS（Buy Online, Pick Up In Store）功能。<br>
+</blockquote>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h2>一、整合流程总览</h2>
+<p style="margin:5px 0"></p>
+<pre><code>1. 攞 PayPal Access Token（OAuth 2.0）
+   ↓
+2. 用 Orders API 建立 Order（POST /v2/checkout/orders）
+   ↓
+3. 从 response 攞「payer-action link」（即付款链接）
+   ↓
+4. 将付款链接生成 QR Code（俾客人扫）或做 Payment Link（俾人㩒）
+   ↓
+5. 客人扫描 QR → 打开 PayPal 付款页面 → 完成付款
+   ↓
+6. 用 check-order API 侦测 Order 状态（APPROVED → 自动 Capture）
+   ↓
+7. 扣款完成（COMPLETED）</code></pre>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h2>二、前置准备</h2>
+<p style="margin:5px 0"></p>
+<h3>2.1 申请 PayPal API Credentials</h3>
+<p style="margin:5px 0"></p>
+<table><thead><tr><th>环境</th><th>用途</th><th>获取位置</th></tr></thead><tbody>
+<tr><td>**Sandbox（沙箱）**</td><td>测试用，用假钱</td><td>https://developer.paypal.com/dashboard/applications → **Sandbox accounts → N/A account → API credentials**</td></tr>
+<tr><td>**Live（正式）**</td><td>上线用，真钱</td><td>https://developer.paypal.com/dashboard/applications → **REST API apps → Create App**</td></tr>
+<p style="margin:5px 0"></p>
+<p>你需要攞到：</p>
+<ul>
+<li>**Client ID**</li>
+<li>**Client Secret**</li>
+</ul>
+<p style="margin:5px 0"></p>
+<h3>2.2 API Endpoint 地址</h3>
+<p style="margin:5px 0"></p>
+<table><thead><tr><th>环境</th><th>Base URL</th></tr></thead><tbody>
+<tr><td>Sandbox</td><td>`https://api-m.sandbox.paypal.com`</td></tr>
+<tr><td>Live</td><td>`https://api-m.paypal.com`</td></tr>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h2>三、Step-by-Step 整合</h2>
+<p style="margin:5px 0"></p>
+<h3>Step 1：攞 Access Token（OAuth 2.0）</h3>
+<p style="margin:5px 0"></p>
+<p>每次调用 PayPal API 之前，先用 Client ID + Client Secret 攞一个临时 token。</p>
+<p style="margin:5px 0"></p>
+<p><strong>Request</strong></p>
+<p style="margin:5px 0"></p>
+<pre><code>POST {BASE_URL}/v1/oauth2/token
+Authorization: Basic base64(Client_ID:Client_Secret)
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials</code></pre>
+<p style="margin:5px 0"></p>
+<p><strong>Node.js 代码示例</strong></p>
+<p style="margin:5px 0"></p>
+<pre><code>const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+const res = await axios.post(`${BASE_URL}/v1/oauth2/token`,
+  'grant_type=client_credentials',
+  {
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  }
+);
+
+const accessToken = res.data.access_token;  // 🔑 呢个就系你要嘅 token
+const expiresIn = res.data.expires_in;       // 有效期（秒），约 9 小时</code></pre>
+<p style="margin:5px 0"></p>
+<blockquote>
+⚠️ Token 有效期约 **32400 秒（9 小时）**，建议 cache 住唔好每次都攞新。<br>
+</blockquote>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h3>Step 2：建立 Order（QR Code 付款）</h3>
+<p style="margin:5px 0"></p>
+<p>用 Orders API 建立一个未付款嘅 Order，PayPal 会俾返一条付款链接。</p>
+<p style="margin:5px 0"></p>
+<p><strong>Request</strong></p>
+<p style="margin:5px 0"></p>
+<pre><code>POST {BASE_URL}/v2/checkout/orders
+Authorization: Bearer {access_token}
+Content-Type: application/json
+PayPal-Request-Id: QR-1715000000000  ← 幂等 ID，防重复下单
+
+{
+  "intent": "CAPTURE",
+  "purchase_units": [{
+    "amount": {
+      "currency_code": "USD",
+      "value": "35.00"
+    },
+    "description": "QR Demo Payment"
+  }],
+  "payment_source": {
+    "paypal": {
+      "experience_context": {
+        "payment_method_selected": "PAYPAL_PAY_LATER",
+        "brand_name": "你的商店名",
+        "locale": "en-US",
+        "landing_page": "LOGIN",
+        "user_action": "PAY_NOW",
+        "return_url": "https://你的网站.com/success",
+        "cancel_url": "https://你的网站.com/"
+      }
+    }
+  }
+}</code></pre>
+<p style="margin:5px 0"></p>
+<p><strong>Response</strong></p>
+<p style="margin:5px 0"></p>
+<pre><code>{
+  "id": "6JY51547J1478104X",
+  "status": "CREATED",
+  "links": [
+    { "rel": "self", "href": "..." },
+    { "rel": "payer-action", "href": "https://www.paypal.com/checkoutnow?token=6JY51547J1478104X" }
+    //             👆 呢条就系付款链接
+  ]
+}</code></pre>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h3>Step 3：生成 QR Code / Payment Link</h3>
+<p style="margin:5px 0"></p>
+<p>从 response 攞 <code>rel: "payer-action"</code> 嗰条 link：</p>
+<p style="margin:5px 0"></p>
+<pre><code>const approveLink = order.links.find(l =&gt; l.rel === 'payer-action');
+const payLink = approveLink.href;</code></pre>
+<p style="margin:5px 0"></p>
+<p>然后用 qrcode library 生成 QR Code：</p>
+<p style="margin:5px 0"></p>
+<pre><code>const QRCode = require('qrcode');
+
+const qrDataUrl = await QRCode.toDataURL(payLink, {
+  width: 400,
+  margin: 2,
+  color: { dark: '#003087', light: '#ffffff' }
+});</code></pre>
+<p style="margin:5px 0"></p>
+<p>或者直接显示条付款链接俾人㩒都得。</p>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h3>Step 4：监控付款状态 + Auto-Capture</h3>
+<p style="margin:5px 0"></p>
+<p>当客人扫 QR → 完成付款后，Order 状态会由 <code>CREATED</code> → <code>APPROVED</code>。侦测到 <code>APPROVED</code> 后要执行 <strong>Capture</strong> 先真正扣钱。</p>
+<p style="margin:5px 0"></p>
+<p><strong>Check Order Status</strong></p>
+<p style="margin:5px 0"></p>
+<pre><code>GET {BASE_URL}/v2/checkout/orders/{order_id}
+Authorization: Bearer {access_token}</code></pre>
+<p style="margin:5px 0"></p>
+<p><strong>如果 status = APPROVED → 执行 Capture</strong></p>
+<p style="margin:5px 0"></p>
+<pre><code>POST {BASE_URL}/v2/checkout/orders/{order_id}/capture
+Authorization: Bearer {access_token}
+Content-Type: application/json
+PayPal-Request-Id: CAP-{order_id}-{timestamp}
+
+（Body 留空）</code></pre>
+<p style="margin:5px 0"></p>
+<p>Capture 成功后 <code>status</code> 会变成 <code>COMPLETED</code>。</p>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h3>Step 5：BOPIS QR Pickup（进阶功能）</h3>
+<p style="margin:5px 0"></p>
+<p>BOPIS = 线上买单，线下取货。流程同普通 QR 付款一样，但有几点唔同：</p>
+<p style="margin:5px 0"></p>
+<p>#### 5.1 purchase_units 要加入商品明细 + shipping options</p>
+<p style="margin:5px 0"></p>
+<pre><code>{
+  "intent": "CAPTURE",
+  "purchase_units": [{
+    "amount": {
+      "currency_code": "USD",
+      "value": "70.00",
+      "breakdown": {
+        "item_total": {
+          "currency_code": "USD",
+          "value": "70.00"
+        }
+      }
+    },
+    "items": [
+      {
+        "name": "iPhone 16 Pro",
+        "quantity": "1",
+        "unit_amount": { "currency_code": "USD", "value": "35.00" },
+        "category": "PHYSICAL_GOODS"
+      },
+      {
+        "name": "AirPods Max",
+        "quantity": "1",
+        "unit_amount": { "currency_code": "USD", "value": "35.00" },
+        "category": "PHYSICAL_GOODS"
+      }
+    ],
+    "description": "BOPIS — Store Pickup (Code: AB3X9K)",
+    "shipping": {
+      "options": [
+        {
+          "id": "store_pickup",
+          "label": "Store Pickup — Downtown San Jose",
+          "type": "PICKUP",
+          "selected": true,
+          "amount": { "currency_code": "USD", "value": "0.00" }
+        },
+        {
+          "id": "us_standard",
+          "label": "US Standard Delivery",
+          "type": "SHIPPING",
+          "selected": false,
+          "amount": { "currency_code": "USD", "value": "10.00" }
+        }
+      ]
+    }
+  }],
+  "payment_source": {
+    "paypal": {
+      "experience_context": {
+        "shipping_preference": "GET_FROM_FILE"
+        // 其他字段同 Step 2
+      }
+    }
+  }
+}</code></pre>
+<p style="margin:5px 0"></p>
+<p>#### 5.2 Merchant 层面的 Pickup Code 管理</p>
+<p style="margin:5px 0"></p>
+<p>你嘅 server 需要自己生成 pickup code，记录对应嘅 order，并提供取货确认功能：</p>
+<p style="margin:5px 0"></p>
+<pre><code>// 生成随机 Pickup Code
+const pickupCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+// 存入数据库
+bopisOrders[pickupCode] = {
+  paypalOrderId: order.id,
+  status: 'PAYMENT_PENDING',  // → READY_FOR_PICKUP → PICKED_UP
+  items: [...],
+  total: '70.00',
+  currency: 'USD',
+  createdAt: new Date().toISOString()
+};
+
+// 取货确认
+function confirmPickup(pickupCode) {
+  // 验证 pickup code
+  // 更新状态为 PICKED_UP
+}</code></pre>
+<p style="margin:5px 0"></p>
+<p>#### 5.3 BOPIS 状态流转</p>
+<p style="margin:5px 0"></p>
+<pre><code>拣货 → Generate QR → Pay（PayPal）→ 付款完成 → 
+  Ready for Pickup → 到店出示 pickup code → 
+  店员确认 → Picked Up</code></pre>
+<p style="margin:5px 0"></p>
+<table><thead><tr><th>状态</th><th>含义</th></tr></thead><tbody>
+<tr><td>`PAYMENT_PENDING`</td><td>已建立 Order，未付款</td></tr>
+<tr><td>`READY_FOR_PICKUP`</td><td>已付款，可以取货</td></tr>
+<tr><td>`PICKED_UP`</td><td>已取货完成</td></tr>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h2>四、整合要点总结</h2>
+<p style="margin:5px 0"></p>
+<h3>4.1 必须做嘅事 ✅</h3>
+<p style="margin:5px 0"></p>
+<table><thead><tr><th>事项</th><th>说明</th></tr></thead><tbody>
+<tr><td>**Cache Access Token**</td><td>Token 有效期 9 小时，唔好次次重新攞</td></tr>
+<tr><td>**幂等 ID（PayPal-Request-Id）**</td><td>每条 request 用唯一 ID，防止重复扣款</td></tr>
+<tr><td>**检查 payer-action link**</td><td>Order 建立后一定要攞到 `rel: "payer-action"` 呢条 link</td></tr>
+<tr><td>**Auto-Capture**</td><td>侦测到 APPROVED 后即时 Capture，唔好等</td></tr>
+<tr><td>**return_url / cancel_url**</td><td>要用动态 base URL（处理 ngrok / domain 切换）</td></tr>
+<p style="margin:5px 0"></p>
+<h3>4.2 常见错误 ❌</h3>
+<p style="margin:5px 0"></p>
+<table><thead><tr><th>错误</th><th>原因</th><th>解决方法</th></tr></thead><tbody>
+<tr><td>`UNPROCESSABLE_ENTITY`</td><td>Body 格式错</td><td>检查 JSON 字段名同类型</td></tr>
+<tr><td>`UNSUPPORTED_SHIPPING_TYPE`</td><td>直接传 `shipping.type: "PICKUP"`</td><td>唔好直接传 type，用 `shipping.options` 数组代替</td></tr>
+<tr><td>`INVALID_ACCOUNT`</td><td>Client ID 同 Secret 唔匹配</td><td>检查 sandbox/live 是否混用</td></tr>
+<tr><td>`ORDER_ALREADY_CAPTURED`</td><td>重复 capture</td><td>检查幂等 ID 或用 `GET` 先 check status</td></tr>
+<tr><td>Token 过期</td><td>超过 9 小时</td><td>检查 `expires_in`，提前 refresh</td></tr>
+<p style="margin:5px 0"></p>
+<h3>4.3 测试建议 🧪</h3>
+<p style="margin:5px 0"></p>
+<ol>
+<li>**先用 Sandbox 测试** — 用沙箱 credential，假钱随便试</li>
+<li>**测试 QR 扫完后再付款** — 用手机扫 QR 或用电脑开 payment link</li>
+<li>**测试 BOPIS 完整流程** — 拣货 → QR → Pay → 显示 pickup code → Confirm Pickup</li>
+<li>**测试 cancel 场景** — 取消付款后返 cancel_url 是否正确</li>
+<li>**测试 ngrok / 生产环境** — 确保 return_url 正确指向外网地址</li>
+</ol>
+<p style="margin:5px 0"></p>
+<hr>
+<p style="margin:5px 0"></p>
+<h2>五、Demo 网站参考</h2>
+<p style="margin:5px 0"></p>
+<p>我哋的 demo 网站（sandbox 环境）：</p>
+<p style="margin:5px 0"></p>
+<p>🌐 <strong>https://foam-riding-component.ngrok-free.dev</strong></p>
+<p style="margin:5px 0"></p>
+<ul>
+<li>🔲 **QR Code Tab** — 输入金额 → Generate QR → 扫 QR 付款</li>
+<li>🏪 **QR Pickup Tab** — 拣货 → Generate QR → 扫 QR 付款 → 显示 Pickup Code → 后台确认取货</li>
+</ul>
+<p style="margin:5px 0"></p>
+<p>完整 Node.js source code 可以向你索取，或者上 https://clawhub.ai 搵 PayPal demo template。</p>
+<p style="margin:5px 0"></p>
+</div></body></html>

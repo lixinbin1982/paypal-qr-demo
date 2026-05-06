@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayPal QR Code Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .paypal-blue { background: #003087; }
+    .paypal-blue:hover { background: #00256b; }
+    .paypal-gold { background: #ffc439; color: #003087; }
+    .paypal-gold:hover { background: #f3b82e; }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .status-pulse { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .nav-btn { transition: all 0.2s; }
+    .nav-btn:hover { transform: translateY(-1px); }
+    .pickup-code { font-family: 'Courier New', monospace; letter-spacing: 0.25em; font-size: 2rem; }
+    .item-btn { transition: all 0.15s; }
+    .item-btn.selected { border-color: #003087; background: #eef2ff; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-3xl mx-auto p-4 md:p-8">
+    <!-- Header -->
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-2">🅿️</div>
+      <h1 class="text-3xl font-bold text-gray-900">PayPal QR Code Demo</h1>
+      <p class="text-gray-500">Scenarios: QR Code &middot; BOPIS QR Pickup</p>
+      <div class="flex items-center justify-center gap-3 mt-2 flex-wrap">
+        <!-- Credential Toggle -->
+        <button onclick="toggleCredential()" id="cred-toggle" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer
+          <%= mode === 'live' ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-amber-100 text-amber-700 border border-amber-300' %>">
+          <span id="cred-icon"><%= mode === 'live' ? '🔴' : '🟡' %></span>
+          <span id="cred-label"><%= mode === 'live' ? 'LIVE' : 'SANDBOX' %></span>
+        </button>
+
+      </div>
+    </div>
+
+    <!-- Tab navigation -->
+    <div class="flex space-x-1 bg-white rounded-xl shadow-sm p-1 mb-6">
+      <button onclick="switchTab('bopis')" id="tab-bopis" class="flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition nav-btn">🏪 QR Pickup</button>
+      <button onclick="switchTab('qr')" id="tab-qr" class="flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition nav-btn">🔲 QR Code</button>
+    </div>
+
+    <!-- ============ TAB 1: QR Code ============ -->
+    <div id="panel-qr" class="tab-panel hidden">
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <form method="POST" action="/create-qr" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+              <input type="number" name="amount" value="<%= amount || '1.00' %>" step="0.01" min="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+              <select name="currency" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="USD" <%= currency === 'USD' ? 'selected' : '' %>>USD</option>
+                <option value="HKD" <%= currency === 'HKD' ? 'selected' : '' %>>HKD</option>
+                <option value="CNY" <%= currency === 'CNY' ? 'selected' : '' %>>CNY</option>
+                <option value="EUR" <%= currency === 'EUR' ? 'selected' : '' %>>EUR</option>
+                <option value="GBP" <%= currency === 'GBP' ? 'selected' : '' %>>GBP</option>
+                <option value="SGD" <%= currency === 'SGD' ? 'selected' : '' %>>SGD</option>
+                <option value="JPY" <%= currency === 'JPY' ? 'selected' : '' %>>JPY</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="w-full paypal-blue text-white font-semibold py-3 px-6 rounded-lg transition text-lg">🔲 Generate QR Code</button>
+        </form>
+      </div>
+
+      <% if (qrCode && orderData) { %>
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6 fade-in">
+        <h2 class="text-lg font-semibold text-center mb-4">📱 Scan to Pay</h2>
+        <div class="flex justify-center mb-4">
+          <div class="border-4 border-blue-100 rounded-xl p-2 shadow-md hover:shadow-lg transition">
+            <img src="<%= qrCode %>" alt="PayPal QR Code" class="w-56 h-56">
+          </div>
+        </div>
+        <div class="text-center space-y-2 mb-4">
+          <p class="text-2xl font-bold text-gray-800"><%= currency.toUpperCase() %> <%= amount %></p>
+          <p class="text-xs text-gray-400">Order ID: <span class="font-mono"><%= orderData.id %></span></p>
+          <p class="text-sm">Status: <span id="orderStatus" class="text-amber-600 font-medium"><%= orderData.status %></span><span id="statusIndicator" class="inline-block w-2 h-2 bg-amber-400 rounded-full ml-1 status-pulse"></span></p>
+        </div>
+        <% if (payLink) { %>
+        <div class="bg-gray-50 rounded-lg p-4 mb-4">
+          <p class="text-sm text-gray-600 mb-2 flex items-center gap-2"><span>🔗</span><span>Payment link</span></p>
+          <div class="flex gap-2">
+            <input type="text" value="<%= payLink %>" readonly class="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-500 font-mono text-xs">
+            <button onclick="copyText('<%= payLink %>', this)" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm transition whitespace-nowrap">📋 Copy</button>
+          </div>
+        </div>
+        <% } %>
+        <div class="border-t border-gray-100 pt-4">
+          <div class="flex gap-2">
+            <input type="text" id="liveOrderId" value="<%= orderData.id %>" readonly class="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500 font-mono text-xs">
+            <button onclick="checkLiveOrder()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition whitespace-nowrap">🔄 Check</button>
+          </div>
+          <div id="liveOrderResult" class="mt-2"></div>
+        </div>
+        <details class="mt-4"><summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">View full API Response</summary><pre class="mt-2 text-xs bg-gray-50 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap break-all"><%= JSON.stringify(orderData, null, 2) %></pre></details>
+      </div>
+      <% } %>
+      <% if (error) { %>
+      <div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 fade-in"><p class="text-red-700 font-medium mb-1">❌ Error</p><pre class="text-xs text-red-600 overflow-x-auto"><%= error %></pre></div>
+      <% } %>
+    </div>
+
+    <!-- ============ TAB 2: BOPIS QR PICKUP ============ -->
+    <div id="panel-bopis" class="tab-panel hidden">
+      <!-- Step 1: Pick Items -->
+      <div id="bopis-step-pick" class="bg-white rounded-xl shadow-sm p-6 mb-4">
+        <h2 class="text-lg font-semibold mb-2">🏪 BOPIS &mdash; QR Pickup</h2>
+        <p class="text-gray-500 text-sm mb-4">Select items, generate a QR code, scan and pay, then pick up at store.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+          <% (storeItems || []).forEach(function(item) { %>
+          <div onclick="toggleItem('<%= item.id %>')" id="item-<%= item.id %>" class="item-btn border-2 border-gray-200 rounded-lg p-3 text-center cursor-pointer hover:border-blue-300">
+            <div class="text-2xl mb-1"><%= item.image %></div>
+            <p class="text-sm font-medium"><%= item.name %></p>
+            <p class="text-xs text-gray-500">$<%= item.price %></p>
+          </div>
+          <% }) %>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-4 text-sm">
+          <div class="flex items-center justify-between">
+            <p>Selected: <span id="bopis-item-count" class="font-semibold">0</span> items &middot; Total: <span class="font-semibold">$<span id="bopis-total">0.00</span></span></p>
+            <button onclick="createBOPISOrder()" id="bopis-create-btn" disabled class="paypal-blue text-white font-semibold py-2.5 px-5 rounded-lg transition text-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">🏪 Generate QR</button>
+          </div>
+          <p id="bopis-item-error" class="text-xs text-red-500 mt-2 hidden">Select at least 1 item</p>
+        </div>
+      </div>
+
+      <!-- Step 2: QR Code Screen -->
+      <div id="bopis-step-qr" class="hidden fade-in">
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-4 text-center">
+          <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 inline-block mb-4 w-full max-w-xs">
+            <p class="text-[10px] text-gray-400 uppercase tracking-wide">Pickup Code</p>
+            <p id="bopis-code-display" class="font-mono font-bold text-3xl tracking-[0.25em] text-purple-700">------</p>
+          </div>
+          <div class="flex justify-center mb-4">
+            <div class="border-4 border-purple-100 rounded-xl p-2 shadow-md">
+              <img id="bopis-qr-img" src="" alt="BOPIS QR Code" class="w-52 h-52">
+            </div>
+          </div>
+          <p class="text-sm text-gray-500 mb-1">Scan with phone camera or open payment link</p>
+          <div class="max-w-sm mx-auto space-y-2">
+            <a id="bopis-pay-link" href="#" target="_blank" class="block w-full py-2.5 rounded-lg paypal-blue text-white text-sm font-medium transition text-center">Open Payment Link</a>
+            <button onclick="checkBOPISPayment()" class="w-full py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-100 transition cursor-pointer">🔄 Check Payment</button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-4">
+          <p class="font-medium text-sm mb-3">🏪 BOPIS Demo Store &mdash; Downtown San Jose</p>
+          <p class="text-xs text-gray-500">123 PayPal Blvd, San Jose, CA 95131</p>
+        </div>
+      </div>
+
+      <!-- Step 3: Check / Confirm -->
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 class="font-medium text-sm mb-3">🔍 Look Up Order</h3>
+        <div class="flex gap-2 mb-3">
+          <input id="bopis-check-oid" placeholder="Pickup Code or PayPal Order ID" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <button onclick="checkBOPISOrder()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition whitespace-nowrap cursor-pointer">🔍 Look Up</button>
+        </div>
+        <div id="bopis-check-result"></div>
+      </div>
+
+      <!-- Step 4: Merchant Admin -->
+      <div class="bg-white rounded-xl shadow-sm p-6">
+        <h3 class="font-medium text-sm mb-3">🔐 Merchant Admin</h3>
+        <p class="text-xs text-gray-500 mb-3">Verify and confirm pickup.</p>
+        <div class="flex gap-2">
+          <input id="admin-pickup-code" placeholder="Enter Pickup Code" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <button onclick="adminLookup()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition whitespace-nowrap cursor-pointer">🔍 Look Up</button>
+        </div>
+        <div id="admin-result" class="mt-2"></div>
+      </div>
+    </div>
+
+  <script>
+    // ========== Utilities ==========
+    function copyText(txt, btn) {
+      navigator.clipboard.writeText(txt);
+      btn.textContent = '✅ Copied';
+      setTimeout(() => btn.textContent = '📋 Copy', 2000);
+    }
+
+    // ========== Credential Toggle ==========
+    async function toggleCredential() {
+      const btn = document.getElementById('cred-toggle');
+      const icon = document.getElementById('cred-icon');
+      const label = document.getElementById('cred-label');
+      const currentMode = label.textContent.trim().toLowerCase();
+      const newMode = currentMode === 'live' ? 'sandbox' : 'live';
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Switching...';
+
+      try {
+        const res = await fetch('/api/credential', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: newMode })
+        });
+        const data = await res.json();
+
+        icon.textContent = newMode === 'live' ? '🔴' : '🟡';
+        label.textContent = newMode.toUpperCase();
+        btn.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ' +
+          (newMode === 'live' ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-amber-100 text-amber-700 border border-amber-300');
+
+        // Clear old results
+        if (typeof checkLiveOrderInterval !== 'undefined') clearInterval(checkLiveOrderInterval);
+        const lr = document.getElementById('liveOrderResult');
+        if (lr) lr.innerHTML = '';
+
+      } catch(e) {
+        console.error('Toggle error:', e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = ''; // restore icons via the icon/label spans already updated
+      }
+    }
+
+    // ========== Tab switching ==========
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('[id^="tab-"]').forEach(t => { t.classList.remove('bg-blue-600', 'text-white'); t.classList.add('text-gray-600'); });
+      document.getElementById('panel-' + tab).classList.remove('hidden');
+      const btn = document.getElementById('tab-' + tab);
+      btn.classList.remove('text-gray-600');
+      btn.classList.add('bg-blue-600', 'text-white');
+    }
+    switchTab('<%= typeof defaultTab !== 'undefined' && defaultTab ? defaultTab : 'qr' %>');
+
+    // ========== QR check ==========
+    let checkLiveOrderInterval;
+
+    async function checkLiveOrder() {
+      const oid = document.getElementById('liveOrderId')?.value;
+      if (!oid) return;
+      const rd = document.getElementById('liveOrderResult');
+      rd.innerHTML = '<p class="text-sm text-gray-400">Checking...</p>';
+      try {
+        const res = await fetch('/check-order', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({orderId:oid}) });
+        const d = await res.json();
+        if (d.error) { rd.innerHTML = '<p class="text-sm text-red-600">'+JSON.stringify(d.error)+'</p>'; return; }
+        const sc = d.status==='COMPLETED'?'text-green-600':d.status==='APPROVED'?'text-blue-600':'text-amber-600';
+        const se = document.getElementById('orderStatus');
+        const si = document.getElementById('statusIndicator');
+        if (se) { se.textContent = d.status; se.className = sc+' font-medium'; if (si) si.className = 'inline-block w-2 h-2 rounded-full ml-1 '+(d.status==='COMPLETED'?'bg-green-500':d.status==='APPROVED'?'bg-blue-400':'bg-amber-400 status-pulse'); }
+        rd.innerHTML = '<div class="bg-gray-50 rounded-lg p-3 mt-2 text-sm"><p>Status: <span class="font-medium '+sc+'">'+d.status+'</span></p>'+(d.status==='COMPLETED'?'<p class="text-xs text-green-600 mt-1">✅ Payment successful!</p>':'')+(d.status==='APPROVED'?'<p class="text-xs text-blue-600 mt-1">⏳ Approved, capturing...</p>':'')+'<details class="mt-2"><summary class="text-xs text-gray-400 cursor-pointer">Response</summary><pre class="text-xs mt-1 bg-white p-2 rounded overflow-x-auto">'+JSON.stringify(d,null,2)+'</pre></details></div>';
+      } catch(e) { rd.innerHTML = '<p class="text-sm text-red-600">Error: '+e.message+'</p>'; }
+    }
+    <% if (orderData && orderData.status !== 'COMPLETED') { %>checkLiveOrderInterval = setInterval(checkLiveOrder, 8000);<% } %>
+
+    // ========== BOPIS QR PICKUP ==========
+    const storeItems = <%-
+      JSON.stringify(storeItems || [])
+    %>;
+    const selectedItems = {};
+
+    function toggleItem(id) {
+      const el = document.getElementById('item-' + id);
+      if (selectedItems[id]) {
+        delete selectedItems[id];
+        el.classList.remove('selected', 'border-blue-900', 'bg-blue-50');
+        el.classList.add('border-gray-200');
+      } else {
+        selectedItems[id] = true;
+        el.classList.add('selected', 'border-blue-900', 'bg-blue-50');
+        el.classList.remove('border-gray-200');
+      }
+      updateBOPISSummary();
+    }
+
+    function updateBOPISSummary() {
+      const count = Object.keys(selectedItems).length;
+      document.getElementById('bopis-item-count').textContent = count;
+      let total = 0;
+      Object.keys(selectedItems).forEach(sku => {
+        const item = storeItems.find(i => i.id === sku);
+        if (item) total += parseFloat(item.price);
+      });
+      document.getElementById('bopis-total').textContent = total.toFixed(2);
+      const btn = document.getElementById('bopis-create-btn');
+      if (count === 0) {
+        btn.disabled = true;
+        document.getElementById('bopis-item-error').classList.add('hidden');
+      } else {
+        btn.disabled = false;
+      }
+    }
+
+    async function createBOPISOrder() {
+      const items = Object.keys(selectedItems);
+      if (items.length === 0) {
+        document.getElementById('bopis-item-error').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('bopis-item-error').classList.add('hidden');
+      document.getElementById('bopis-create-btn').disabled = true;
+      document.getElementById('bopis-create-btn').textContent = '⏳ Generating...';
+
+      try {
+        const res = await fetch('/bopis/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items, currency: 'USD' })
+        });
+        const data = await res.json();
+        if (data.error) { alert('Error: ' + JSON.stringify(data.error)); return; }
+
+        document.getElementById('bopis-qr-img').src = data.qrCode;
+        document.getElementById('bopis-code-display').textContent = data.pickupCode;
+        document.getElementById('bopis-pay-link').href = data.payLink;
+        document.getElementById('bopis-pay-link').textContent = '🔗 Open Payment Link';
+        document.getElementById('bopis-step-pick').classList.add('hidden');
+        document.getElementById('bopis-step-qr').classList.remove('hidden');
+
+      } catch(e) {
+        alert('Error: ' + e.message);
+      } finally {
+        document.getElementById('bopis-create-btn').disabled = false;
+        document.getElementById('bopis-create-btn').textContent = '🏪 Generate QR';
+      }
+    }
+
+    async function checkBOPISPayment() {
+      const rd = document.getElementById('bopis-check-result');
+      rd.innerHTML = '<p class="text-sm text-gray-400">Checking...</p>';
+      try {
+        const ordersRes = await fetch('/bopis/orders');
+        const ordersData = await ordersRes.json();
+        const code = document.getElementById('bopis-code-display').textContent;
+        const order = ordersData.orders.find(o => o.pickupCode === code);
+        if (!order) { rd.innerHTML = '<p class="text-sm text-amber-600">Order not found yet. Payment might still be pending.</p>'; return; }
+        showBOPISResult(order, rd);
+      } catch(e) {
+        rd.innerHTML = '<p class="text-sm text-red-600">Error: ' + e.message + '</p>';
+      }
+    }
+
+    async function checkBOPISOrder() {
+      const input = document.getElementById('bopis-check-oid').value.trim();
+      if (!input) return;
+      const rd = document.getElementById('bopis-check-result');
+      rd.innerHTML = '<p class="text-sm text-gray-400">Checking...</p>';
+
+      try {
+        const ordersRes = await fetch('/bopis/orders');
+        const ordersData = await ordersRes.json();
+        let order = ordersData.orders.find(o => o.pickupCode === input.toUpperCase());
+
+        if (order) {
+          showBOPISResult(order, rd);
+          return;
+        }
+
+        const checkRes = await fetch('/check-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: input })
+        });
+        const checkData = await checkRes.json();
+
+        if (checkData.status === 'COMPLETED') {
+          const match = ordersData.orders.find(o => o.paypalOrderId === input);
+          if (match) {
+            showBOPISResult(match, rd);
+          } else {
+            rd.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-3 mt-2 text-sm"><p class="text-green-700">Payment completed</p><p class="text-xs text-gray-500 mt-1">But no BOPIS pickup code found for this order.</p></div>';
+          }
+        } else if (checkData.status === 'APPROVED') {
+          rd.innerHTML = '<div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2 text-sm"><p class="text-blue-700">Approved, auto-capturing...</p></div>';
+        } else {
+          rd.innerHTML = '<div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2 text-sm"><p class="text-amber-700">Status: ' + checkData.status + '</p></div>';
+        }
+      } catch(e) {
+        rd.innerHTML = '<p class="text-sm text-red-600">Error: ' + e.message + '</p>';
+      }
+    }
+
+    function showBOPISResult(order, container) {
+      const statusColors = {
+        PAYMENT_PENDING: 'text-amber-600',
+        READY_FOR_PICKUP: 'text-green-600',
+        PICKED_UP: 'text-gray-500',
+        CAPTURED: 'text-blue-600'
+      };
+      const statusLabels = {
+        PAYMENT_PENDING: 'Awaiting Payment',
+        READY_FOR_PICKUP: 'Ready for Pickup',
+        PICKED_UP: 'Picked Up',
+        CAPTURED: 'Captured'
+      };
+
+      container.innerHTML = '<div class="bg-gray-50 rounded-lg p-4 mt-2 text-sm">' +
+        '<div class="grid grid-cols-2 gap-2">' +
+          '<p class="text-gray-500">Pickup Code:</p><p class="font-mono font-bold">' + order.pickupCode + '</p>' +
+          '<p class="text-gray-500">PayPal Order:</p><p class="font-mono text-xs">' + order.paypalOrderId + '</p>' +
+          '<p class="text-gray-500">Status:</p><p class="font-medium ' + (statusColors[order.status] || 'text-gray-600') + '">' + (statusLabels[order.status] || order.status) + '</p>' +
+          '<p class="text-gray-500">Total:</p><p>$' + order.total + '</p>' +
+          '<p class="text-gray-500">Items:</p><p class="text-xs">' + order.items.map(i => i.name).join(', ') + '</p>' +
+        '</div>' +
+        (order.status === 'READY_FOR_PICKUP' ? '<button onclick="confirmPickup(\'' + order.pickupCode + '\')" class="mt-3 w-full paypal-gold font-semibold py-2.5 px-4 rounded-lg transition text-sm cursor-pointer">Confirm Pickup</button>' : '') +
+        (order.status === 'PICKED_UP' ? '<p class="mt-2 text-xs text-green-600">Picked up at ' + new Date(order.pickedUpAt).toLocaleString() + '</p>' : '') +
+        (order.status === 'PAYMENT_PENDING' ? '<p class="mt-2 text-xs text-amber-600">Pay via QR code or payment link above</p>' : '') +
+      '</div>';
+    }
+
+    async function confirmPickup(code) {
+      try {
+        const res = await fetch('/bopis/pickup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pickupCode: code })
+        });
+        const data = await res.json();
+        if (data.error) { alert('Error: ' + data.error); return; }
+
+        const rd = document.getElementById('bopis-check-result');
+        showBOPISResult(data.bopis, rd);
+      } catch(e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function adminLookup() {
+      const code = document.getElementById('admin-pickup-code').value.trim().toUpperCase();
+      if (!code) return;
+      const rd = document.getElementById('admin-result');
+      rd.innerHTML = '<p class="text-sm text-gray-400">Looking up...</p>';
+      try {
+        const res = await fetch('/bopis/orders');
+        const data = await res.json();
+        const order = data.orders.find(o => o.pickupCode === code);
+        if (!order) { rd.innerHTML = '<p class="text-sm text-red-600">Not found</p>'; return; }
+        showBOPISResult(order, rd);
+      } catch(e) { rd.innerHTML = '<p class="text-sm text-red-600">Error: '+e.message+'</p>'; }
+    }
+  </script>
+</body>
+</html>
