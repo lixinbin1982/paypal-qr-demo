@@ -16,7 +16,7 @@ const SANDBOX_CLIENT_SECRET = process.env.PAYPAL_SANDBOX_CLIENT_SECRET || 'EF7BT
 const SANDBOX_BASE_URL = 'https://api-m.sandbox.paypal.com';
 
 // Credential mode — toggled via API
-let credentialMode = 'sandbox'; // 'live' or 'sandbox'
+let credentialMode = 'live'; // 'live' or 'sandbox'
 
 function getCreds() {
   if (credentialMode === 'live') {
@@ -83,7 +83,7 @@ app.post('/api/credential', (req, res) => {
   res.json({ mode: credentialMode, clientId: CLIENT_ID, baseUrl: BASE_URL });
 });
 
-// ==================== QR CODE ====================
+// ==================== QR CODE (PayPal Payment Links API) ====================
 
 app.post('/create-qr', async (req, res) => {
   try {
@@ -93,59 +93,57 @@ app.post('/create-qr', async (req, res) => {
     const { CLIENT_ID, BASE_URL } = getCreds();
     const token = await getAccessToken();
 
-    const orderRes = await axios.post(`${BASE_URL}/v2/checkout/orders`, {
-      intent: 'CAPTURE',
-      purchase_units: [{
-        amount: { currency_code: curr, value: value },
-        description: 'QR Demo Payment'
-      }],
-      payment_source: {
-        paypal: {
-          experience_context: {
-            payment_method_selected: 'PAYPAL_PAY_LATER',
-            brand_name: 'QR Demo Merchant',
-            locale: 'en-US',
-            landing_page: 'LOGIN',
-            user_action: 'PAY_NOW',
-            return_url: getBaseUrl(req) + '/success',
-            cancel_url: getBaseUrl(req) + '/'
-          }
+    // Create payment link via PayPal Payment Links & Buttons API
+    // Note: Requires 'Payment Links & Buttons' feature enabled in Developer Dashboard
+    const payRes = await axios.post(`${BASE_URL}/v1/checkout/payment-resources`, {
+      integration_mode: 'LINK',
+      type: 'BUY_NOW',
+      reusable: 'MULTIPLE',
+      return_url: 'https://pretty-grace-production-4f1d.up.railway.app/success',
+      line_items: [{
+        name: 'QR Demo Payment - $' + value,
+        unit_amount: {
+          currency_code: curr,
+          value: value
         }
-      }
+      }]
     }, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'PayPal-Request-Id': `QR-${Date.now()}`
+        'Accept': 'application/json',
+        'PayPal-Request-Id': `PLB-${Date.now()}`
       }
     });
 
-    const order = orderRes.data;
-    console.log('✅ Order created:', order.id, 'status:', order.status);
+    const resource = payRes.data;
+    const paymentLink = resource.links?.find(l => l.rel === 'payment_link')?.href || null;
+    const orderId = resource.id;
+    
+    console.log('✅ Payment Link created:', orderId, 'status:', resource.status);
+    console.log('🔗 Payment Link URL:', paymentLink);
 
-    const approveLink = order.links.find(l => l.rel === 'payer-action');
-    const payLink = approveLink ? approveLink.href : null;
-
-    if (!payLink) {
+    if (!paymentLink) {
       return res.render('index', {
         mode: credentialMode, clientId: CLIENT_ID,
-        error: 'Order created but no payer-action link found. Status: ' + order.status,
-        qrCode: null, orderData: order, orderId: order.id,
+        error: 'Payment resource created but no payment_link found.',
+        qrCode: null, orderData: resource, orderId: orderId,
         payLink: null, amount: value, currency: curr,
         storeItems
       });
     }
 
-    const qrDataUrl = await QRCode.toDataURL(payLink, {
+    // Generate QR from official PayPal payment link
+    const qrDataUrl = await QRCode.toDataURL(paymentLink, {
       width: 400, margin: 2, color: { dark: '#003087', light: '#ffffff' }
     });
 
-    global.__lastRealOrder = { id: order.id, status: order.status, created: Date.now() };
+    global.__lastRealOrder = { id: orderId, resource: resource, created: Date.now() };
 
     res.render('index', {
       mode: credentialMode, clientId: CLIENT_ID,
-      error: null, qrCode: qrDataUrl, orderData: order, orderId: order.id,
-      payLink: payLink, amount: value, currency: curr,
+      error: null, qrCode: qrDataUrl, orderData: resource, orderId: orderId,
+      payLink: paymentLink, amount: value, currency: curr,
       storeItems
     });
 
@@ -203,6 +201,7 @@ const storeItems = [
   { id: 'item-003', name: 'Apple Watch Ultra 2', price: '35.00', image: '⌚' },
   { id: 'item-004', name: 'iPad Mini 7', price: '35.00', image: '📟' },
   { id: 'item-005', name: 'AirPods Max', price: '35.00', image: '🎤' },
+  { id: 'item-000', name: 'Quick Test • $0.10', price: '0.10', image: '🧪' },
 ];
 
 // BOPIS — create order with QR + payment link (frontend calls this)
