@@ -5,14 +5,14 @@ const QRCode = require('qrcode');
 const app = express();
 const PORT = process.env.PORT || 3457;
 
-// Live credentials
-const LIVE_CLIENT_ID = 'AVHelYkeISS6fnW6Nr305JicpQe1wfszAsHcGh_G-5Wh7qlCSdUZ_MNyvXzvXJPAOnc9rKtFuP7IV0Zi';
-const LIVE_CLIENT_SECRET = 'EDufemrQ3Bxuo3St_NhTAQ8HJCx0iRjFnJDGyFkqt06B1hWCDWSI2lhM5u6eSFkZTf_-5ONDFlZ02oy8';
+// Live credentials (use env vars in production)
+const LIVE_CLIENT_ID = process.env.PAYPAL_LIVE_CLIENT_ID || 'AVHelYkeISS6fnW6Nr305JicpQe1wfszAsHcGh_G-5Wh7qlCSdUZ_MNyvXzvXJPAOnc9rKtFuP7IV0Zi';
+const LIVE_CLIENT_SECRET = process.env.PAYPAL_LIVE_CLIENT_SECRET || 'EDufemrQ3Bxuo3St_NhTAQ8HJCx0iRjFnJDGyFkqt06B1hWCDWSI2lhM5u6eSFkZTf_-5ONDFlZ02oy8';
 const LIVE_BASE_URL = 'https://api-m.paypal.com';
 
-// Sandbox credentials
-const SANDBOX_CLIENT_ID = 'AVJ64pXVas3BtB-YrVVMFfCAZx2r2RlEjn0TwRtpGGNxqhhR-DRILDWX8gONSh-jSgunDQucOrVplXtm';
-const SANDBOX_CLIENT_SECRET = 'EF7BTKS5-hA43DK29EJ9cfAvSWPKkaQ1tAd9wy6BeUhAtoZ55NSG-vddh42_zp1QXrCSa77dTCuJIMzj';
+// Sandbox credentials (use env vars in production)
+const SANDBOX_CLIENT_ID = process.env.PAYPAL_SANDBOX_CLIENT_ID || 'AVJ64pXVas3BtB-YrVVMFfCAZx2r2RlEjn0TwRtpGGNxqhhR-DRILDWX8gONSh-jSgunDQucOrVplXtm';
+const SANDBOX_CLIENT_SECRET = process.env.PAYPAL_SANDBOX_CLIENT_SECRET || 'EF7BTKS5-hA43DK29EJ9cfAvSWPKkaQ1tAd9wy6BeUhAtoZ55NSG-vddh42_zp1QXrCSa77dTCuJIMzj';
 const SANDBOX_BASE_URL = 'https://api-m.sandbox.paypal.com';
 
 // Credential mode — toggled via API
