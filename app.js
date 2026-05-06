@@ -99,7 +99,6 @@ app.post('/create-qr', async (req, res) => {
       integration_mode: 'LINK',
       type: 'BUY_NOW',
       reusable: 'MULTIPLE',
-      return_url: 'https://pretty-grace-production-4f1d.up.railway.app/success',
       line_items: [{
         name: 'QR Demo Payment - $' + value,
         unit_amount: {
