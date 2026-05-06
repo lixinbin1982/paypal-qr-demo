@@ -86,7 +86,7 @@
         </div>
         <% if (payLink) { %>
         <div class="bg-gray-50 rounded-lg p-4 mb-4">
-          <p class="text-sm text-gray-600 mb-2 flex items-center gap-2"><span>🔗</span><span>Payment link</span></p>
+          <a href="<%= payLink %>" target="_blank" class="block w-full py-2.5 rounded-lg paypal-blue text-white text-sm font-medium transition text-center mb-3">🔗 Open Payment Link</a>
           <div class="flex gap-2">
             <input type="text" value="<%= payLink %>" readonly class="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-500 font-mono text-xs">
             <button onclick="copyText('<%= payLink %>', this)" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm transition whitespace-nowrap">📋 Copy</button>
