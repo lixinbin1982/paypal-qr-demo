@@ -313,12 +313,16 @@
         const data = await res.json();
         if (data.error) { alert('Error: ' + JSON.stringify(data.error)); return; }
 
-        document.getElementById('bopis-qr-img').src = data.qrCode;
-        document.getElementById('bopis-code-display').textContent = data.pickupCode;
-        document.getElementById('bopis-pay-link').href = data.payLink;
-        document.getElementById('bopis-pay-link').textContent = '🔗 Open Payment Link';
-        document.getElementById('bopis-step-pick').classList.add('hidden');
-        document.getElementById('bopis-step-qr').classList.remove('hidden');
+        const imgEl = document.getElementById('bopis-qr-img');
+        const codeEl = document.getElementById('bopis-code-display');
+        const linkEl = document.getElementById('bopis-pay-link');
+        if (!imgEl || !codeEl || !linkEl) { alert('UI not ready, try again'); return; }
+        imgEl.src = data.qrCode;
+        codeEl.textContent = data.pickupCode;
+        linkEl.href = data.payLink;
+        linkEl.textContent = '🔗 Open Payment Link';
+        document.getElementById('bopis-step-pick')?.classList.add('hidden');
+        document.getElementById('bopis-step-qr')?.classList.remove('hidden');
 
       } catch(e) {
         alert('Error: ' + e.message);
